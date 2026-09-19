@@ -1,0 +1,9 @@
+{
+  "name": "現場猜拳",
+  "short_name": "猜拳",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#07070c",
+  "theme_color": "#07070c",
+  "lang": "zh-Hant"
+}
