@@ -1,0 +1,15 @@
+name = "vtjanken-relay"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "JankenRoom"
+
+# SQLite 版的 Durable Object 才吃得到 Workers 免費方案。
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["JankenRoom"]
+
+[observability]
+enabled = true

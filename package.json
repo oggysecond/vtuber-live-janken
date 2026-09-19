@@ -7,7 +7,8 @@
     "dev": "vite --host",
     "build": "vite build",
     "start": "vite build && vite preview --host --port 4173",
-    "preview": "vite preview --host --port 4173"
+    "preview": "vite preview --host --port 4173",
+    "verify:cross": "node scripts/verify-crossdevice.mjs"
   },
   "dependencies": {
     "qrcode": "^1.5.4",

@@ -1,7 +1,7 @@
 import "./style.css";
 import QRCode from "qrcode";
 import { HANDS, HAND_ORDER, handByKey, handMarkup } from "./hands.js";
-import { createSync } from "./sync.js";
+import { createSync, HELLO_MS, STALE_MS } from "./sync.js";
 import { tickSound, revealSound, unlockAudio } from "./audio.js";
 import { helpView } from "./help.js";
 
@@ -18,6 +18,7 @@ const state = {
   connectedAt: 0,
   mute: false,
   pendingChoice: null,
+  link: { relay: "connecting", ntfy: "connecting", limited: false, stage: 0, control: 0 },
 };
 
 let sync;
@@ -26,17 +27,34 @@ let helloTimer;
 let wakeLock;
 let qrUrl = "";
 let qrFor = "";
+let linkTimer;
+let lastLinkKey = "";
+
+// 網址上的房號長這樣：ABCD-1234（房間代碼 - PIN）。舊的純房號連結仍然可用，
+// 只是沒有 PIN 保護。
+function parseTag(raw) {
+  const [room = "", pin = ""] = String(raw || "").toUpperCase().split("-");
+  return {
+    room: room.replace(/[^A-Z0-9]/g, "").slice(0, 6),
+    pin: pin.replace(/[^0-9]/g, "").slice(0, 6),
+  };
+}
+
+function roomTag(room, pin) {
+  return pin ? `${room}-${pin}` : room;
+}
 
 function parseRoute() {
   const hash = location.hash.replace(/^#/, "") || "/";
   const parts = hash.split("/").filter(Boolean);
   if (parts[0] === "help") {
-    return { role: "help", room: parts[1] || "" };
+    return { role: "help", room: parts[1] || "", pin: "" };
   }
   if ((parts[0] === "c" || parts[0] === "s") && parts[1]) {
-    return { role: parts[0] === "c" ? "control" : "stage", room: parts[1].toUpperCase() };
+    const { room, pin } = parseTag(parts[1]);
+    return { role: parts[0] === "c" ? "control" : "stage", room, pin };
   }
-  return { role: "home", room: "" };
+  return { role: "home", room: "", pin: "" };
 }
 
 function makeRoom() {
@@ -47,16 +65,37 @@ function makeRoom() {
   return out;
 }
 
+// PIN 決定實際的通道名稱。房號被投影機閃到也沒用，沒有 PIN 就訂閱不到。
+function makePin() {
+  const n = new Uint32Array(1);
+  if (globalThis.crypto?.getRandomValues) crypto.getRandomValues(n);
+  else n[0] = Math.floor(Math.random() * 0xffffffff);
+  return String(n[0] % 10000).padStart(4, "0");
+}
+
 function go(hash) {
   location.hash = hash;
 }
 
-function stageUrl(room) {
-  return `${location.origin}${location.pathname}#/s/${room}`;
+function stageUrl(room, pin) {
+  return `${location.origin}${location.pathname}#/s/${roomTag(room, pin)}`;
 }
 
 function nowConnected() {
-  return Date.now() - state.connectedAt < 8000;
+  // relay 直接告訴我們對面在不在；ntfy 那條線只能靠心跳推斷。
+  const { role } = state.route;
+  if (role === "control" && state.link.stage > 0) return true;
+  if (role === "stage" && state.link.control > 0) return true;
+  return Date.now() - state.connectedAt < STALE_MS;
+}
+
+// 通道出問題時要講出來。舊版把錯誤全部吞掉，現場只會看到畫面莫名不動。
+function linkNote() {
+  const { relay, ntfy, limited } = state.link;
+  if (relay === "down" && ntfy === "down") return "兩條通道都斷了，請檢查網路";
+  if (limited) return "ntfy 被限流，目前靠 relay 傳送";
+  if (relay === "down") return "relay 斷線，備援通道接手中";
+  return "";
 }
 
 function vibrate(pattern) {
@@ -94,7 +133,8 @@ function applyRemote(message) {
   if (state.route.role === "control") {
     if (message.phase === "countdown" && state.phase === "countdown") return;
     if (message.phase === "reveal" && state.phase === "reveal") return;
-    state.choice = message.choice;
+    // selected 訊息刻意不帶 choice（見 pick()），別拿 null 去洗掉自己的選擇。
+    if (message.choice != null || message.phase === "idle") state.choice = message.choice;
   } else {
     state.pendingChoice = message.choice ?? state.pendingChoice;
     if (message.phase !== "reveal") state.choice = null;
@@ -165,7 +205,10 @@ function pick(id) {
   state.choice = id;
   state.phase = "selected";
   vibrate(20);
-  publish("selected", { choice: id });
+  // 舞台在揭曉前只會顯示「準備好了」，根本不需要知道是哪個拳。
+  // 選拳當下就送出 choice，等於在通道上提前公布答案——這裡把它拿掉，
+  // 洩漏窗口就從結構上消失，不必倚賴通道保密。
+  publish("selected", { choice: null });
   render();
 }
 
@@ -220,22 +263,26 @@ function homeView() {
           <div><span class="num">3</span><span>觀眾出拳後，控場按「揭曉」。大螢幕 3、2、1，然後翻牌。</span></div>
         </div>
         <button class="primary" data-act="create">建立房間</button>
-        <div class="join-row">
+        <div class="join-row two">
           <input id="room-input" maxlength="6" placeholder="房間代碼" autocomplete="off" />
-          <button class="ghost" data-act="join-control">進控場</button>
+          <input id="pin-input" maxlength="4" placeholder="PIN" inputmode="numeric" autocomplete="off" />
         </div>
-        <button class="ghost full" data-act="join-stage">進舞台畫面</button>
+        <div class="link-row">
+          <button class="ghost" data-act="join-control">進控場</button>
+          <button class="ghost" data-act="join-stage">進舞台畫面</button>
+        </div>
         <div class="link-row">
           <button class="ghost" data-act="help">使用說明</button>
           <button class="ghost" data-act="staff">工作人員說明</button>
         </div>
-        <p class="tiny">同一房間才能對上。建議手機當控場、筆電接投影當舞台。鍵盤 1 / 2 / 3 出拳，Enter 揭曉。</p>
+        <p class="tiny">房間代碼和 PIN 兩個都要一樣才連得上。建議手機當控場、筆電接投影當舞台。鍵盤 1 / 2 / 3 出拳，Enter 揭曉。</p>
       </section>
     </main>
   `;
 }
 
 function controlView(room) {
+  const note = linkNote();
   const hand = state.choice ? HANDS[state.choice] : null;
   const canReveal = Boolean(hand) && state.phase !== "countdown" && state.phase !== "reveal";
   const secretClass = hand ? "secret is-picked" : "secret";
@@ -255,10 +302,11 @@ function controlView(room) {
       <header class="topbar">
         <div>
           <div class="brand">控場</div>
-          <div class="room-chip">房間 ${room}</div>
+          <div class="room-chip">房間 ${room}${state.route.pin ? ` · PIN ${state.route.pin}` : ""}</div>
         </div>
         <div class="status-chip ${nowConnected() ? "is-on" : ""}">${nowConnected() ? "舞台有回應" : "等待舞台"}</div>
       </header>
+      ${note ? `<p class="link-note">${note}</p>` : ""}
       <section class="${secretClass}" style="${secretStyle}">${secretInner}</section>
       <section class="choices">
         ${HAND_ORDER.map((id) => {
@@ -278,7 +326,7 @@ function controlView(room) {
         <img id="qr" width="120" height="120" alt="舞台網址 QR" />
         <div>
           <p>投影電腦請打開舞台網址。大螢幕在揭曉前看不到你選的拳。</p>
-          <code>${stageUrl(room)}</code>
+          <code>${stageUrl(room, state.route.pin)}</code>
           <button class="ghost linkish" data-act="copy">複製舞台網址</button>
         </div>
       </section>
@@ -311,6 +359,7 @@ function stageView() {
     <main class="page stage">
       <button class="stage-mute" data-act="mute">${state.mute ? "音效關" : "音效開"}</button>
       <div class="stage-dot ${nowConnected() ? "is-on" : ""}"></div>
+      ${linkNote() ? `<p class="stage-note">${linkNote()}</p>` : ""}
       <section class="stage-board">${board}</section>
     </main>
   `;
@@ -320,9 +369,10 @@ async function afterRender() {
   const img = document.getElementById("qr");
   const room = state.route.room;
   if (!img || !room) return;
-  if (qrFor !== room || !qrUrl) {
-    qrFor = room;
-    qrUrl = await QRCode.toDataURL(stageUrl(room), {
+  const tag = roomTag(room, state.route.pin);
+  if (qrFor !== tag || !qrUrl) {
+    qrFor = tag;
+    qrUrl = await QRCode.toDataURL(stageUrl(room, state.route.pin), {
       width: 240,
       margin: 1,
       color: { dark: "#07070c", light: "#ffffff" },
@@ -352,21 +402,26 @@ function wire() {
     if (pickId) pick(pickId);
     if (act === "help") go("#/help");
     if (act === "staff") go("#/help/staff");
-    if (act === "create") go(`#/c/${makeRoom()}`);
+    if (act === "create") go(`#/c/${roomTag(makeRoom(), makePin())}`);
     if (act === "join-control" || act === "join-stage") {
-      const room = (document.getElementById("room-input")?.value || "").trim().toUpperCase();
+      const { room } = parseTag(document.getElementById("room-input")?.value || "");
+      const pin = (document.getElementById("pin-input")?.value || "").replace(/[^0-9]/g, "");
       if (!room) return;
-      go(`#/${act === "join-control" ? "c" : "s"}/${room}`);
+      go(`#/${act === "join-control" ? "c" : "s"}/${roomTag(room, pin)}`);
     }
     if (act === "reveal") reveal();
     if (act === "next") nextRound();
     if (act === "copy") {
-      const room =
-        state.route.room ||
-        (document.getElementById("room-input")?.value || "").trim().toUpperCase();
+      const room = state.route.room;
       if (!room) return;
-      await navigator.clipboard.writeText(stageUrl(room));
-      btn.textContent = "已複製";
+      try {
+        // clipboard API 在非 HTTPS（現場備援的 http://192.168.x.x）會直接丟錯，
+        // 不接住的話按鈕會整個沒反應。
+        await navigator.clipboard.writeText(stageUrl(room, state.route.pin));
+        btn.textContent = "已複製";
+      } catch {
+        btn.textContent = "請手動複製下方網址";
+      }
     }
     if (act === "mute") {
       state.mute = !state.mute;
@@ -400,16 +455,41 @@ function connectRoute() {
     render();
     return;
   }
-  sync = createSync(state.route.room, applyRemote);
+  state.link = { relay: "connecting", ntfy: "connecting", limited: false, stage: 0, control: 0 };
+  sync = createSync({
+    room: state.route.room,
+    pin: state.route.pin,
+    role: state.route.role === "stage" ? "stage" : "control",
+    onMessage: applyRemote,
+    onStatus: (next) => {
+      state.link = next;
+      render();
+    },
+  });
   if (state.route.role === "stage") {
     sync.send({ type: "hello" });
+    // 這個心跳只是 ntfy 備援用的存在證明；relay 那條線有 presence，不靠它。
+    // 間隔必須比 ntfy 的補額速度（5 秒 1 則）慢，否則會被限流。
     helloTimer = setInterval(() => {
       if (state.route.role !== "stage") return;
       sync?.send({ type: "hello" });
-    }, 2500);
+    }, HELLO_MS);
   }
   keepAwake();
   render();
+}
+
+// 狀態燈必須會自己變暗：不能等到下一則訊息進來才發現對面早就掉線了。
+function watchLink() {
+  clearInterval(linkTimer);
+  linkTimer = setInterval(() => {
+    const { role } = state.route;
+    if (role !== "control" && role !== "stage") return;
+    const now = `${nowConnected()}|${linkNote()}`;
+    if (now === lastLinkKey) return;
+    lastLinkKey = now;
+    render();
+  }, 2000);
 }
 
 window.addEventListener("hashchange", () => {
@@ -423,4 +503,5 @@ document.addEventListener("visibilitychange", () => {
 
 wire();
 bindKeys();
+watchLink();
 connectRoute();

@@ -620,3 +620,31 @@ button {
   gap: 8px;
   margin-top: 10px;
 }
+
+.join-row.two {
+  grid-template-columns: 1fr 96px;
+}
+
+.join-row.two input#pin-input {
+  text-align: center;
+  letter-spacing: 0.2em;
+}
+
+.link-note,
+.stage-note {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  color: #ffd9a0;
+  background: rgba(255, 170, 60, 0.12);
+  border: 1px solid rgba(255, 170, 60, 0.3);
+}
+
+.stage-note {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+}
