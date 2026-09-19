@@ -133,15 +133,24 @@ npm run start    # 建置後 http://localhost:4173
 ### 部署 relay
 
 ```bash
-cd worker
+cd worker          # 一定要先進 worker/
 npx wrangler deploy
 ```
 
-第一次會要你登入 Cloudflare。部署完會印出網址，像
-`https://vtjanken-relay.<你的子網域>.workers.dev`。
-把它填進 `src/config.js` 的 `DEFAULT_RELAY`（把 `https://` 換成 `wss://`），
-commit 後 GitHub Actions 會自動重新部署網站。**這一步沒做的話網站仍然可用**，
-只是全部走 ntfy 備援線。
+> **務必先 `cd worker`。** 在專案根目錄執行 `wrangler deploy` 的話，wrangler 會
+> 偵測到這是 Vite 專案，改成把「網站本身」部署成一個帶靜態資源的 Worker，
+> 並且自動改寫 `vite.config.js`、`package.json`（連 `preview` 指令都會被換掉）
+> 和 `.gitignore`。那不是 relay——它沒有 Durable Object，`/room/…` 不會運作。
+
+目前已部署的 relay：`wss://vtjanken-relay.vtuber-live-janken.workers.dev`
+（已填在 `src/config.js`）。
+
+第一次部署會要你登入 Cloudflare。`wrangler login` 需要互動式終端機，
+在 Claude Code 的 `!` 指令裡跑不起來，請開一個自己的終端機視窗執行。
+
+換帳號重新部署時，把印出的新網址填進 `src/config.js` 的 `DEFAULT_RELAY`
+（把 `https://` 換成 `wss://`），commit 後 GitHub Actions 會自動重新部署網站。
+**這一步沒做的話網站仍然可用**，只是全部走 ntfy 備援線。
 
 用的是 Workers 免費方案：Durable Object 走 SQLite 版本，並且開了 hibernation，
 沒有訊息的時候不計費。一場活動的用量遠在免費額度內。
@@ -149,7 +158,16 @@ commit 後 GitHub Actions 會自動重新部署網站。**這一步沒做的話�
 驗證：
 
 ```bash
-curl https://vtjanken-relay.<你的子網域>.workers.dev/health
+curl https://vtjanken-relay.vtuber-live-janken.workers.dev/health
+# {"ok":true,"ts":…}
+```
+
+跨裝置驗證（需要 puppeteer-core，會開兩個互相隔離的瀏覽器）：
+
+```bash
+npm run start                                   # 另開一個終端機
+RELAY=wss://vtjanken-relay.vtuber-live-janken.workers.dev npm run verify:cross
+npm run verify:cross                            # 不給 RELAY 則測 ntfy 備援線
 ```
 
 `src/config.js` 留空字串就會完全停用 relay，只走 ntfy 備援。

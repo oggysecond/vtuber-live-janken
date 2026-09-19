@@ -6,7 +6,7 @@
 // 留空字串＝不使用 relay，全部走 ntfy 備援線（功能完整，只是延遲高一點、
 // 而且沒有即時的「舞台在不在線上」偵測）。這裡刻意不預填猜測的網址：
 // 填錯的話畫面會一直掛著「relay 斷線」的警告。
-const DEFAULT_RELAY = "";
+const DEFAULT_RELAY = "wss://vtjanken-relay.vtuber-live-janken.workers.dev";
 
 // 測試用：網址加 ?relay=ws://127.0.0.1:8787 指到本機，?relay=off 則完全停用。
 function override() {
