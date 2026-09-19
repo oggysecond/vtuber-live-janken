@@ -4,6 +4,12 @@
 const MAX_SOCKETS = 8;
 const MAX_BYTES = 4096;
 
+// 單一連線的發訊上限。正常一局只會送 4 則，按鍵按得再快也遠低於這個數字，
+// 所以不會誤擋現場操作。它擋的是灌量（燒請求配額、拖垮房間），
+// 不是擋「拿到房號和 PIN 的人送一則假訊息」——那只能靠保密。
+const RATE_WINDOW_MS = 10000;
+const RATE_MAX = 30;
+
 const ALLOWED = [
   "https://oggysecond.github.io",
   "http://localhost:5173",
@@ -22,6 +28,22 @@ function originOk(origin) {
 export class JankenRoom {
   constructor(ctx) {
     this.ctx = ctx;
+    // 只放在記憶體。DO 休眠會清空，但休眠代表那段時間根本沒有訊息，
+    // 也就沒有人在灌量，所以歸零是安全的。
+    this.rates = new Map();
+  }
+
+  allow(ws) {
+    const id = ws.deserializeAttachment()?.id;
+    if (!id) return true;
+    const now = Date.now();
+    const slot = this.rates.get(id);
+    if (!slot || now - slot.start >= RATE_WINDOW_MS) {
+      this.rates.set(id, { start: now, count: 1 });
+      return true;
+    }
+    slot.count += 1;
+    return slot.count <= RATE_MAX;
   }
 
   async fetch(request) {
@@ -38,7 +60,7 @@ export class JankenRoom {
     const [client, server] = Object.values(new WebSocketPair());
     // Hibernation API：沒有訊息時 DO 可以休眠，連線不會斷，才待得住免費額度。
     this.ctx.acceptWebSocket(server);
-    server.serializeAttachment({ role });
+    server.serializeAttachment({ role, id: crypto.randomUUID() });
     this.sendPresence();
 
     return new Response(null, { status: 101, webSocket: client });
@@ -46,6 +68,8 @@ export class JankenRoom {
 
   webSocketMessage(ws, raw) {
     if (typeof raw !== "string" || raw.length > MAX_BYTES) return;
+    // 超量就直接丟棄，不回報——回報等於給攻擊者一個放大管道。
+    if (!this.allow(ws)) return;
     if (raw === "ping") {
       ws.send("pong");
       return;
@@ -61,6 +85,7 @@ export class JankenRoom {
   }
 
   webSocketClose(ws) {
+    this.rates.delete(ws.deserializeAttachment()?.id);
     try {
       ws.close();
     } catch {
