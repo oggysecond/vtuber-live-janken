@@ -53,7 +53,8 @@ button {
 }
 
 .home,
-.control {
+.control,
+.help {
   overflow: auto;
 }
 
@@ -208,6 +209,10 @@ button {
   border-radius: 999px;
   border: 1px solid var(--line);
   color: var(--muted);
+}
+
+.quiet-link {
+  color: inherit;
 }
 
 .status-chip.is-on {
@@ -512,4 +517,106 @@ button {
   .hand-emoji {
     font-size: 84px;
   }
+}
+
+/* ---------- Help ---------- */
+
+.help {
+  padding: calc(20px + var(--safe-top)) 16px calc(32px + var(--safe-bottom));
+}
+
+.help-card {
+  width: min(720px, 100%);
+  margin: 0 auto;
+  background: rgba(12, 12, 18, 0.78);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  padding: 28px 22px 32px;
+  backdrop-filter: blur(16px);
+}
+
+.help-card h1 {
+  font-size: clamp(32px, 7vw, 48px);
+  margin: 8px 0 6px;
+}
+
+.help-card h2 {
+  margin: 28px 0 10px;
+  font-size: 22px;
+}
+
+.help-card h3 {
+  margin: 20px 0 8px;
+  font-size: 17px;
+  color: var(--gold);
+}
+
+.help-card p,
+.help-card li {
+  color: #d7dbea;
+  line-height: 1.7;
+}
+
+.help-card ul,
+.help-ol {
+  margin: 0 0 8px 1.2em;
+}
+
+.help-card a {
+  color: var(--cyan);
+}
+
+.help-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+
+.help-nav a {
+  background: #1b1b27;
+  color: var(--ink);
+  text-decoration: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 16px;
+  font-size: 14px;
+}
+
+.help-table th,
+.help-table td {
+  border: 1px solid var(--line);
+  padding: 10px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.help-table th {
+  color: var(--gold);
+  background: #101018;
+}
+
+.help-card code {
+  font-size: 13px;
+  background: #101018;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.help-back {
+  margin-top: 28px;
+}
+
+.link-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
 }

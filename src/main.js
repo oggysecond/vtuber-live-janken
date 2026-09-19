@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { HANDS, HAND_ORDER, handByKey, handMarkup } from "./hands.js";
 import { createSync } from "./sync.js";
 import { tickSound, revealSound, unlockAudio } from "./audio.js";
+import { helpView } from "./help.js";
 
 const app = document.getElementById("app");
 const COUNT_FROM = 3;
@@ -29,6 +30,9 @@ let qrFor = "";
 function parseRoute() {
   const hash = location.hash.replace(/^#/, "") || "/";
   const parts = hash.split("/").filter(Boolean);
+  if (parts[0] === "help") {
+    return { role: "help", room: parts[1] || "" };
+  }
   if ((parts[0] === "c" || parts[0] === "s") && parts[1]) {
     return { role: parts[0] === "c" ? "control" : "stage", room: parts[1].toUpperCase() };
   }
@@ -185,7 +189,7 @@ function nextRound() {
 
 function bindKeys() {
   window.onkeydown = (event) => {
-    if (state.route.role === "home") return;
+    if (state.route.role === "home" || state.route.role === "help") return;
     if (event.target.closest?.("input")) return;
     const hand = handByKey(event.key);
     if (hand && state.route.role === "control") {
@@ -221,6 +225,10 @@ function homeView() {
           <button class="ghost" data-act="join-control">進控場</button>
         </div>
         <button class="ghost full" data-act="join-stage">進舞台畫面</button>
+        <div class="link-row">
+          <button class="ghost" data-act="help">使用說明</button>
+          <button class="ghost" data-act="staff">工作人員說明</button>
+        </div>
         <p class="tiny">同一房間才能對上。建議手機當控場、筆電接投影當舞台。鍵盤 1 / 2 / 3 出拳，Enter 揭曉。</p>
       </section>
     </main>
@@ -323,6 +331,12 @@ async function afterRender() {
   img.src = qrUrl;
 }
 
+function scrollHelp() {
+  if (state.route.role !== "help") return;
+  const target = state.route.room === "staff" ? document.getElementById("staff") : null;
+  (target || app.querySelector(".help"))?.scrollIntoView({ block: "start" });
+}
+
 function wire() {
   app.onclick = async (event) => {
     const btn = event.target.closest("button");
@@ -336,6 +350,8 @@ function wire() {
     const act = btn.dataset.act;
     const pickId = btn.dataset.pick;
     if (pickId) pick(pickId);
+    if (act === "help") go("#/help");
+    if (act === "staff") go("#/help/staff");
     if (act === "create") go(`#/c/${makeRoom()}`);
     if (act === "join-control" || act === "join-stage") {
       const room = (document.getElementById("room-input")?.value || "").trim().toUpperCase();
@@ -362,9 +378,11 @@ function wire() {
 function render() {
   const { role, room } = state.route;
   if (role === "home") app.innerHTML = homeView();
+  else if (role === "help") app.innerHTML = helpView();
   else if (role === "control") app.innerHTML = controlView(room);
   else app.innerHTML = stageView();
   afterRender();
+  scrollHelp();
 }
 
 function connectRoute() {
@@ -378,7 +396,7 @@ function connectRoute() {
   state.count = COUNT_FROM;
   qrUrl = "";
   qrFor = "";
-  if (state.route.role === "home") {
+  if (state.route.role === "home" || state.route.role === "help") {
     render();
     return;
   }

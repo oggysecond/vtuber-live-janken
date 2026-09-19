@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import puppeteer from "puppeteer-core";
 
-const BASE = "http://127.0.0.1:5173/";
+const BASE = process.env.BASE || "http://127.0.0.1:5173/";
 const OUT = fileURLToPath(new URL("../.verify", import.meta.url));
 await mkdir(OUT, { recursive: true });
 const shot = (name) => path.join(OUT, name);
