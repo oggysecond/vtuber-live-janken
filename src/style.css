@@ -215,9 +215,40 @@ button {
   color: inherit;
 }
 
-.status-chip.is-on {
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.status-chip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tone, #5a5a6a);
+}
+
+.status-chip.tone-green {
+  --tone: #7dffb3;
   color: #7dffb3;
   border-color: rgba(125, 255, 179, 0.35);
+}
+
+.status-chip.tone-yellow {
+  --tone: #ffd166;
+  color: #ffd166;
+  border-color: rgba(255, 209, 102, 0.35);
+}
+
+.status-chip.tone-red {
+  --tone: #ff5a76;
+  color: #ff8fa2;
+  border-color: rgba(255, 90, 118, 0.4);
+}
+
+.status-chip.tone-red i {
+  animation: blink 0.9s steps(2, start) infinite;
 }
 
 .secret {
@@ -354,6 +385,8 @@ button {
   user-select: none;
 }
 
+/* 舞台上唯一的狀態提示。給全場看的畫面不放字；工作人員把滑鼠移上去才看得到說明。
+   顏色之外再加動態：紅燈閃、灰燈慢慢呼吸，分不清紅綠的人也看得出差別。 */
 .stage-dot {
   position: absolute;
   top: 16px;
@@ -361,11 +394,88 @@ button {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #ff5a76;
+  background: #5a5a6a;
+  z-index: 6;
 }
 
-.stage-dot.is-on {
+.stage-dot::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+
+.stage-dot.tone-green {
   background: #7dffb3;
+}
+
+.stage-dot.tone-yellow {
+  background: #ffd166;
+}
+
+.stage-dot.tone-red {
+  background: #ff5a76;
+  animation: blink 0.9s steps(2, start) infinite;
+}
+
+.stage-dot.tone-gray {
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+.stage-dot:hover::after {
+  content: attr(data-label);
+  position: absolute;
+  top: -6px;
+  right: 20px;
+  white-space: nowrap;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--ink);
+  background: rgba(20, 20, 30, 0.92);
+  border: 1px solid var(--line);
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* 觀眾 QR：投影機上按 Q 才出現，蓋在整個舞台上方。 */
+.viewer-qr {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 24px;
+  background: #050509;
+}
+
+.viewer-qr img {
+  width: min(62vh, 70vw);
+  height: min(62vh, 70vw);
+  border-radius: 20px;
+  background: white;
+  padding: 12px;
+}
+
+.viewer-qr-title {
+  font-size: clamp(22px, 3.4vw, 44px);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.viewer-qr-note {
+  color: var(--muted);
+  font-size: clamp(16px, 2vw, 24px);
 }
 
 .stage-mute {
@@ -630,8 +740,7 @@ button {
   letter-spacing: 0.2em;
 }
 
-.link-note,
-.stage-note {
+.link-note {
   margin: 10px 0 0;
   padding: 8px 12px;
   border-radius: 12px;
@@ -641,10 +750,30 @@ button {
   border: 1px solid rgba(255, 170, 60, 0.3);
 }
 
-.stage-note {
-  position: absolute;
-  top: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 5;
+/* 兩個 QR 放在同一個畫面上，一定要一眼分得出哪個能給觀眾。 */
+.share + .share {
+  margin-top: 10px;
+}
+
+.share-title {
+  color: var(--ink) !important;
+  font-weight: 800;
+  font-size: 14px !important;
+  margin-bottom: 2px;
+}
+
+.share-stage {
+  border-color: rgba(255, 90, 118, 0.45);
+}
+
+.share-stage .share-title {
+  color: #ff8fa2 !important;
+}
+
+.share-viewer {
+  border-color: rgba(125, 255, 179, 0.4);
+}
+
+.share-viewer .share-title {
+  color: #7dffb3 !important;
 }

@@ -11,13 +11,13 @@ function messageId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+// 每次載入頁面各自一個 id，不存進 sessionStorage：瀏覽器「複製分頁」會連
+// sessionStorage 一起複製，從控場複製出來的舞台分頁就會跟控場同一個 id，
+// 把控場的每一則訊息都當成自己發的丟掉——單機備用正好是同一台開兩個分頁。
+const PAGE_ID = messageId();
+
 function clientId() {
-  const key = "vtjanken-client";
-  const existing = sessionStorage.getItem(key);
-  if (existing) return existing;
-  const created = messageId();
-  sessionStorage.setItem(key, created);
-  return created;
+  return PAGE_ID;
 }
 
 // 房間代碼 + PIN 推導出實際的通道名稱，房號被看到也訂閱不到。
