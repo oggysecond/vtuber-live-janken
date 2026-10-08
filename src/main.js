@@ -35,7 +35,6 @@ let helloTimer;
 let wakeLock;
 let linkTimer;
 let lastLinkKey = "";
-let lastFullscreen = false;
 const qrCache = new Map();
 
 // 網址上的房號長這樣：ABCD-1234（房間代碼 - PIN）。舊的純房號連結仍然可用，
@@ -104,12 +103,6 @@ function nowConnected() {
 // 投影機和觀眾手機都是「顯示端」：只收訊號、照著畫。
 function isDisplay() {
   return state.route.role === "stage" || state.route.role === "viewer";
-}
-
-function isFullscreen() {
-  if (document.fullscreenElement || document.webkitFullscreenElement) return true;
-  // 按 F11 的瀏覽器全螢幕不會觸發 Fullscreen API，只能看視窗是不是跟螢幕一樣大。
-  return Math.abs(window.innerHeight - screen.height) <= 1 && Math.abs(window.innerWidth - screen.width) <= 1;
 }
 
 // 連線狀況只用右上角的小燈表示，舞台上不放任何文字——那是給全場看的畫面。
@@ -451,8 +444,9 @@ function viewerQrOverlay() {
 
 function stageView() {
   const viewer = state.route.role === "viewer";
-  // 提示字只在還沒全螢幕的時候出現：那時候是工作人員在架設，全螢幕之後是給觀眾看的。
-  const hint = viewer ? "等待開始" : isFullscreen() ? "" : "點一下進入全螢幕 · 按 Q 顯示觀眾 QR";
+  // 投影機的待機畫面只有「猜拳」兩個字，不放操作提示：這是給全場看的畫面，
+  // 而且手機瀏覽器沒有網頁全螢幕，提示字會一直掛著。點一下／F／Q 怎麼用寫在說明頁。
+  const hint = viewer ? "等待開始" : "";
   let board = `
     <div>
       <div class="idle-mark">猜拳</div>
@@ -656,19 +650,6 @@ function watchLink() {
     render();
   }, 2000);
 }
-
-// 進出全螢幕時重畫，提示字才會跟著出現／消失。
-function onDisplayChange() {
-  if (state.route.role !== "stage") return;
-  const now = isFullscreen();
-  if (now === lastFullscreen) return;
-  lastFullscreen = now;
-  render();
-}
-
-document.addEventListener("fullscreenchange", onDisplayChange);
-document.addEventListener("webkitfullscreenchange", onDisplayChange);
-window.addEventListener("resize", onDisplayChange);
 
 window.addEventListener("hashchange", () => {
   state.route = parseRoute();

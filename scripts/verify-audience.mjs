@@ -1,6 +1,6 @@
 // 觀眾模式端對端驗證：1 台控場、1 台投影機、N 支各自獨立的觀眾手機（預設 30）。
 // 檢查全部同步、揭曉前沒人看得到手勢、觀眾怎麼改網址或送假封包都碰不到投影機，
-// 以及投影機的 Q 鍵 QR、全螢幕提示字。
+// 以及投影機的 Q 鍵 QR、待機畫面不放任何操作提示字。
 //
 //   npm run build && npx vite preview --port 4180 &          # 或任何靜態伺服器
 //   cd worker && npx wrangler dev &                          # 本機 relay
@@ -140,8 +140,9 @@ await ctl.click("[data-act=next]");
 await wait(1500);
 await rogueS.close().catch(() => {});
 await stg.bringToFront();
-const hintBefore = await stg.evaluate(() => document.querySelector(".idle-sub")?.textContent || "");
-check("還沒全螢幕：顯示操作提示", hintBefore.includes("全螢幕"), `「${hintBefore}」`);
+// 待機畫面只該有「猜拳」（左上角那顆幾乎隱形的音效鈕不算）。
+const idleWords = async () => (await text(stg)).replace(/音效[開關]/g, "").replace(/\s+/g, " ").trim();
+check("投影機待機畫面只有「猜拳」，沒有操作提示字", (await idleWords()) === "猜拳", `「${await idleWords()}」`);
 await stg.keyboard.press("q");
 let qrShown = false;
 for (let i = 0; i < 30 && !qrShown; i++) { qrShown = await stg.evaluate(() => !!document.querySelector(".viewer-qr img")); if (!qrShown) await wait(200); }
@@ -161,11 +162,10 @@ await ctl.click("[data-act=reveal]");
 await wait(4500);
 await ctl.click("[data-act=next]");
 await wait(1500);
-const hintFs = await stg.evaluate(() => document.querySelector(".idle-sub")?.textContent || "");
-check("進入全螢幕後提示字消失", fsOn && hintFs === "", fsOn ? `（剩下「${hintFs}」）` : "（沒進入全螢幕）");
+check("沒有提示字，點一下仍然會進全螢幕", fsOn);
+check("全螢幕下待機畫面一樣只有「猜拳」", (await idleWords()) === "猜拳", `「${await idleWords()}」`);
 await stg.evaluate(() => document.exitFullscreen?.());
 await wait(800);
-check("離開全螢幕，提示字回來", (await stg.evaluate(() => document.querySelector(".idle-sub")?.textContent || "")).includes("全螢幕"));
 
 if (KILL) {
   console.log("\n--- 主線掛掉時投影機長什麼樣子 ---");
