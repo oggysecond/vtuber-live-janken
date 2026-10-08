@@ -447,37 +447,6 @@ button {
   }
 }
 
-/* 觀眾 QR：投影機上按 Q 才出現，蓋在整個舞台上方。 */
-.viewer-qr {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  display: grid;
-  place-content: center;
-  justify-items: center;
-  gap: 24px;
-  background: #050509;
-}
-
-.viewer-qr img {
-  width: min(62vh, 70vw);
-  height: min(62vh, 70vw);
-  border-radius: 20px;
-  background: white;
-  padding: 12px;
-}
-
-.viewer-qr-title {
-  font-size: clamp(22px, 3.4vw, 44px);
-  font-weight: 800;
-  letter-spacing: 0.12em;
-}
-
-.viewer-qr-note {
-  color: var(--muted);
-  font-size: clamp(16px, 2vw, 24px);
-}
-
 .stage-mute {
   position: absolute;
   top: 12px;

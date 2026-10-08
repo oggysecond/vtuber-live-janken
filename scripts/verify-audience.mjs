@@ -1,6 +1,6 @@
 // 觀眾模式端對端驗證：1 台控場、1 台投影機、N 支各自獨立的觀眾手機（預設 30）。
 // 檢查全部同步、揭曉前沒人看得到手勢、觀眾怎麼改網址或送假封包都碰不到投影機，
-// 以及投影機的 Q 鍵 QR、待機畫面不放任何操作提示字。
+// 以及投影機待機畫面不放任何操作提示字、按 Q 不會跳出任何東西。
 //
 //   npm run build && npx vite preview --port 4180 &          # 或任何靜態伺服器
 //   cd worker && npx wrangler dev &                          # 本機 relay
@@ -133,7 +133,7 @@ check("網址改成 /c/ 也操控不了其他觀眾", !(await Promise.all(viewer
 check("直接送假封包，其他觀眾不受影響", !(await Promise.all(viewers.map((v) => text(v).then((t) => t.includes("布"))))).some(Boolean));
 check("自己編一把發訊鑰匙會被拒絕", forged === "rejected", `（${forged}）`);
 
-// ---- 第二局：Q 鍵 QR、自動收起、舞台上沒有任何技術字眼 ----
+// ---- 第二局：舞台上沒有提示字、沒有 QR 畫面、沒有任何技術字眼 ----
 console.log("\n--- 投影機畫面 ---");
 await ctl.bringToFront();
 await ctl.click("[data-act=next]");
@@ -143,16 +143,23 @@ await stg.bringToFront();
 // 待機畫面只該有「猜拳」（左上角那顆幾乎隱形的音效鈕不算）。
 const idleWords = async () => (await text(stg)).replace(/音效[開關]/g, "").replace(/\s+/g, " ").trim();
 check("投影機待機畫面只有「猜拳」，沒有操作提示字", (await idleWords()) === "猜拳", `「${await idleWords()}」`);
+// 舞台原本按 Q 會秀出觀眾 QR，企劃組怕現場誤觸，已經拿掉：按了不該有任何反應。
 await stg.keyboard.press("q");
-let qrShown = false;
-for (let i = 0; i < 30 && !qrShown; i++) { qrShown = await stg.evaluate(() => !!document.querySelector(".viewer-qr img")); if (!qrShown) await wait(200); }
-check("按 Q 秀出觀眾 QR", qrShown);
+await wait(1500);
+const afterQ = await stg.evaluate(() => ({ imgs: document.querySelectorAll(".stage img").length, overlay: !!document.querySelector(".viewer-qr") }));
+check("舞台按 Q 不會跳出任何東西", afterQ.imgs === 0 && !afterQ.overlay && (await idleWords()) === "猜拳", `「${await idleWords()}」`);
 await ctl.bringToFront();
 await ctl.keyboard.press("3");
 await wait(2000);
-const qrGone = await stg.evaluate(() => !document.querySelector(".viewer-qr"));
-check("藝人一選拳，QR 自動收起", qrGone);
-check("收起後投影機顯示「準備好了」", (await text(stg)).includes("準備好了"));
+check("藝人選拳後投影機顯示「準備好了」", (await text(stg)).includes("準備好了"));
+// 只拿掉舞台端的；控場上的綠框觀眾 QR 要原樣留著當備用。
+const kept = await ctl.evaluate(() => ({
+  qr: (document.querySelector("#qr-viewer")?.getAttribute("src") || "").startsWith("data:image"),
+  copy: !!document.querySelector("[data-act=copy-viewer]"),
+  mentionsQ: /按\s*Q/.test(document.querySelector(".share-viewer")?.textContent || ""),
+}));
+check("控場仍保留綠框觀眾 QR 與複製網址", kept.qr && kept.copy);
+check("控場的說明不再提到按 Q", !kept.mentionsQ);
 
 await stg.click(".stage-board");                       // 點一下＝進全螢幕
 await wait(800);

@@ -23,8 +23,6 @@ const state = {
   viewerLink: "connecting",
   viewers: null,
   viewerAddress: null,
-  showViewerQr: false,
-  viewerQr: "",
 };
 
 let sync;
@@ -178,8 +176,6 @@ function applyRemote(message) {
     // selected 訊息刻意不帶 choice（見 pick()），別拿 null 去洗掉自己的選擇。
     if (message.choice != null || message.phase === "idle") state.choice = message.choice;
   } else {
-    // 藝人一選拳，觀眾 QR 就自動收起來，免得擋住「準備好了」和翻牌。
-    if (message.phase !== "idle") state.showViewerQr = false;
     // 投影機自己倒數到 0 就先翻牌了，控場的 reveal 晚一點才到。
     // 同一張牌已經翻過就不要再翻一次，否則揭曉音效會響兩次。
     if (message.phase === "reveal" && state.phase === "reveal" && state.choice === message.choice) {
@@ -295,35 +291,17 @@ function bindKeys() {
     if (isDisplay() && event.key.toLowerCase() === "f") {
       document.documentElement.requestFullscreen?.();
     }
-    if (state.route.role === "stage" && event.key.toLowerCase() === "q") {
-      event.preventDefault();
-      toggleViewerQr();
-    }
   };
 }
 
-// 投影機上按 Q：全螢幕秀出觀眾 QR，讓台下掃了用手機看。再按一次收起來；
-// 藝人一選拳也會自動收起。第一次按才開始算位址（要跑 PBKDF2，大約零點幾秒）。
-async function toggleViewerQr() {
-  state.showViewerQr = !state.showViewerQr;
-  render();
-  if (!state.showViewerQr || state.viewerQr) return;
-  const { room, pin } = state.route;
-  const keys = await viewerKeys(room, pin);
-  if (state.route.room !== room || state.route.pin !== pin) return;
-  state.viewerQr = keys ? await qrData(viewerUrl(keys.address), 480) : "unsupported";
-  render();
-}
-
-async function qrData(url, width = 240) {
-  const key = `${width}|${url}`;
-  if (!qrCache.has(key)) {
+async function qrData(url) {
+  if (!qrCache.has(url)) {
     qrCache.set(
-      key,
-      QRCode.toDataURL(url, { width, margin: 1, color: { dark: "#07070c", light: "#ffffff" } })
+      url,
+      QRCode.toDataURL(url, { width: 240, margin: 1, color: { dark: "#07070c", light: "#ffffff" } })
     );
   }
-  return qrCache.get(key);
+  return qrCache.get(url);
 }
 
 function homeView() {
@@ -418,7 +396,7 @@ function controlView(room) {
         <img id="qr-viewer" width="120" height="120" alt="觀眾用 QR" />
         <div>
           <p class="share-title">觀眾用手機看 · 可以公開</p>
-          <p>只能看、不能操作。投影電腦上按 <b>Q</b> 也能把這個 QR 秀在大螢幕上。${watchers}</p>
+          <p>只能看、不能操作。${watchers}</p>
           ${
             address === "unsupported"
               ? `<code>這個網址開不了觀眾畫面（需要 https）</code>`
@@ -432,20 +410,10 @@ function controlView(room) {
   `;
 }
 
-function viewerQrOverlay() {
-  const body =
-    state.viewerQr === "unsupported"
-      ? `<p class="viewer-qr-note">這個網址開不了觀眾畫面（需要 https）</p>`
-      : state.viewerQr
-        ? `<img src="${state.viewerQr}" alt="觀眾 QR" />`
-        : `<p class="viewer-qr-note">產生中…</p>`;
-  return `<div class="viewer-qr">${body}<p class="viewer-qr-title">手機掃這裡，一起看猜拳</p></div>`;
-}
-
 function stageView() {
   const viewer = state.route.role === "viewer";
   // 投影機的待機畫面只有「猜拳」兩個字，不放操作提示：這是給全場看的畫面，
-  // 而且手機瀏覽器沒有網頁全螢幕，提示字會一直掛著。點一下／F／Q 怎麼用寫在說明頁。
+  // 而且手機瀏覽器沒有網頁全螢幕，提示字會一直掛著。點一下／F 進全螢幕寫在說明頁。
   const hint = viewer ? "等待開始" : "";
   let board = `
     <div>
@@ -473,7 +441,6 @@ function stageView() {
       ${viewer ? "" : `<button class="stage-mute" data-act="mute">${state.mute ? "音效關" : "音效開"}</button>`}
       <div class="stage-dot tone-${dot.tone}" data-label="${dot.label}" title="${dot.label}"></div>
       <section class="stage-board">${board}</section>
-      ${!viewer && state.showViewerQr ? viewerQrOverlay() : ""}
     </main>
   `;
 }
@@ -572,8 +539,6 @@ function connectRoute() {
   state.pendingChoice = null;
   state.phase = "idle";
   state.count = COUNT_FROM;
-  state.showViewerQr = false;
-  state.viewerQr = "";
   state.viewers = null;
   state.viewerAddress = null;
   // 觀眾手機預設靜音：場內幾十支手機一起響只會吵。
